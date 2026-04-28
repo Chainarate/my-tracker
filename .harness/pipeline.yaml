@@ -1,0 +1,159 @@
+pipeline:
+  name: Chelsea Transfer Tracker (Zero-Cost)
+  identifier: chelsea_transfer_tracker
+  projectIdentifier: ChelseaTracker
+  orgIdentifier: Hocco
+  description: |
+    Builds the Chelsea FC transfer-news image and runs it on a 6-hour cron.
+    Stack:
+      - Ingestion: public RSS only (Reddit RSS + Sky/BBC/etc) - no API keys.
+      - AI:        Groq free tier (Llama 3.3 70B Versatile).
+    Only secret injected at runtime: GROQ_API_KEY.
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: account.GitHub_Hocco
+        repoName: chelsea-transfer-tracker
+        build: <+input>
+
+  stages:
+    # =====================================================================
+    # 1. BUILD: Lint, build the Docker image, push to a registry.
+    # =====================================================================
+    - stage:
+        name: Build & Push Image
+        identifier: build_and_push
+        type: CI
+        spec:
+          cloneCodebase: true
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: account.k8s_harness_delegate
+              namespace: harness-builds
+              automountServiceAccountToken: true
+              os: Linux
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Compile sanity check
+                  identifier: compile_check
+                  spec:
+                    connectorRef: account.dockerhub
+                    image: python:3.12-slim
+                    shell: Sh
+                    command: |
+                      python -m pip install --quiet -r requirements.txt
+                      python -c "import src.main; print('import OK')"
+
+              - step:
+                  type: BuildAndPushECR
+                  name: Build & push to ECR
+                  identifier: build_push_ecr
+                  spec:
+                    connectorRef: account.aws_ecr_push
+                    region: ap-southeast-1
+                    account: "123456789012"
+                    imageName: chelsea-transfer-tracker
+                    tags:
+                      - <+pipeline.sequenceId>
+                      - latest
+                    dockerfile: Dockerfile
+                    context: .
+
+    # =====================================================================
+    # 2. RUN: Pull the image and execute it. Single secret: GROQ_API_KEY.
+    # =====================================================================
+    - stage:
+        name: Run Scraper
+        identifier: run_scraper
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: ShellScript
+                  name: Execute scraper container
+                  identifier: exec_container
+                  timeout: 30m
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    environmentVariables:
+                      # >>> The ONLY secret in the entire pipeline <<<
+                      - name: GROQ_API_KEY
+                        type: String
+                        value: <+secrets.getValue("groq_api_key")>
+
+                      # Non-secret config
+                      - name: GROQ_MODEL
+                        type: String
+                        value: llama-3.3-70b-versatile
+                      - name: REDDIT_RSS_URL
+                        type: String
+                        value: https://old.reddit.com/r/chelseafc/new/.rss
+                      - name: STORAGE_BACKEND
+                        type: String
+                        value: s3
+                      - name: STORAGE_BUCKET
+                        type: String
+                        value: hocco-chelsea-tracker
+                      - name: STORAGE_PREFIX
+                        type: String
+                        value: chelsea-tracker/
+                      - name: AWS_REGION
+                        type: String
+                        value: ap-southeast-1
+                      - name: IMAGE_URI
+                        type: String
+                        value: 123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/chelsea-transfer-tracker:latest
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          set -euo pipefail
+                          mkdir -p "$HOME/chelsea-data"
+
+                          # If you keep the CSV on the delegate, use 'STORAGE_BACKEND=local'
+                          # and skip ECR + S3 entirely. The block below assumes ECR + S3.
+
+                          aws ecr get-login-password --region "$AWS_REGION" \
+                            | docker login --username AWS --password-stdin \
+                              "$(echo "$IMAGE_URI" | cut -d/ -f1)"
+
+                          docker pull "$IMAGE_URI"
+
+                          docker run --rm \
+                            -e GROQ_API_KEY \
+                            -e GROQ_MODEL \
+                            -e REDDIT_RSS_URL \
+                            -e STORAGE_BACKEND \
+                            -e STORAGE_BUCKET \
+                            -e STORAGE_PREFIX \
+                            -e AWS_REGION \
+                            -e OUTPUT_DIR=/data \
+                            -v "$HOME/chelsea-data:/data" \
+                            "$IMAGE_URI"
+
+                          # Also publish the CSV as a Harness pipeline artifact.
+                          cp "$HOME/chelsea-data/chelsea_tracker.csv" \
+                             "$HARNESS_OUTPUT_DIRECTORY/chelsea_tracker.csv" || true
+
+# ---------------------------------------------------------------------------
+# Cron trigger: every 6 hours (UTC).
+# ---------------------------------------------------------------------------
+trigger:
+  name: Every 6 hours
+  identifier: every_6h
+  enabled: true
+  orgIdentifier: Hocco
+  projectIdentifier: ChelseaTracker
+  pipelineIdentifier: chelsea_transfer_tracker
+  source:
+    type: Scheduled
+    spec:
+      type: Cron
+      spec:
+        expression: "0 */6 * * *"

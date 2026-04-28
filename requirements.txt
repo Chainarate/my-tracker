@@ -1,0 +1,13 @@
+# Runtime deps for Chelsea Transfer Tracker (zero-cost stack v3)
+# - feedparser:  Reddit RSS + news RSS ingestion (no auth)
+# - openai:      Groq is OpenAI-compatible — we point base_url at api.groq.com
+# - pandas:      idempotent CSV reads/writes
+# - boto3 / google-cloud-storage: optional object-store uploaders
+
+feedparser==6.0.11
+openai==1.59.7
+httpx==0.27.2
+pandas==2.2.3
+boto3==1.35.36
+google-cloud-storage==2.18.2
+python-dateutil==2.9.0.post0

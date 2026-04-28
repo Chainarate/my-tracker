@@ -1,0 +1,55 @@
+# GitHub Actions equivalent of the Harness pipeline (zero-cost stack).
+# Single repo secret required: GROQ_API_KEY.
+
+name: Chelsea Transfer Tracker
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"     # every 6 hours
+  workflow_dispatch: {}        # manual trigger
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          tags: chelsea-transfer-tracker:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run scraper container
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          mkdir -p ./data
+          docker run --rm \
+            -e GROQ_API_KEY \
+            -e GROQ_MODEL=llama-3.3-70b-versatile \
+            -e REDDIT_RSS_URL=https://old.reddit.com/r/chelseafc/new/.rss \
+            -e STORAGE_BACKEND=local \
+            -e OUTPUT_DIR=/data \
+            -v "$PWD/data:/data" \
+            chelsea-transfer-tracker:ci
+
+      - name: Upload CSV as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chelsea_tracker_csv
+          path: ./data/chelsea_tracker.csv
+          retention-days: 30
