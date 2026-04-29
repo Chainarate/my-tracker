@@ -12,7 +12,7 @@ import feedparser
 
 from ..config import TeamConfig
 from ..models import TransferItem
-from .reddit_rss_scraper import TRANSFER_KEYWORDS  # share the keyword set
+from .reddit_rss_scraper import TRANSFER_KEYWORDS, _looks_like_transfer
 
 log = logging.getLogger(__name__)
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -40,7 +40,7 @@ class NewsRSSScraper:
         self.user_agent = user_agent
 
     def _looks_like_transfer(self, blob_lower: str) -> bool:
-        return any(kw in blob_lower for kw in TRANSFER_KEYWORDS)
+        return _looks_like_transfer(blob_lower)
 
     def _mentions_team(self, blob_lower: str) -> bool:
         return any(kw in blob_lower for kw in self.team.all_keywords())

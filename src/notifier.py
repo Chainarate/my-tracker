@@ -85,10 +85,21 @@ class DiscordNotifier:
             log.info("DISCORD_WEBHOOK_URL not set — skipping notifications.")
             return 0
 
-        targets = [it for it in items if TIER_RANK.get(it.tier, 99) <= self.threshold]
+        # Require BOTH a high tier AND a definite hit_miss verdict.
+        # An item with tier=Tier 1 but hit_miss=Unknown is the AI saying
+        # "this looks important but I'm not sure what it claims" — which
+        # is exactly the false-positive shape (injury news, ambiguous quotes
+        # from named reporters) we want to suppress.
+        ALERT_HIT_MISS = {"Hit", "Pending", "Miss"}
+        targets = [
+            it for it in items
+            if TIER_RANK.get(it.tier, 99) <= self.threshold
+            and it.hit_miss in ALERT_HIT_MISS
+        ]
         if not targets:
             log.info(
-                "No items at >= %s tier in this run (%d analyzed). Nothing to notify.",
+                "No items at >= %s tier with definite hit_miss in this run "
+                "(%d analyzed). Nothing to notify.",
                 self.min_tier, len(items),
             )
             return 0

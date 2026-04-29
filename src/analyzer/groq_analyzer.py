@@ -32,8 +32,23 @@ log = logging.getLogger(__name__)
 
 
 SYSTEM_INSTRUCTION = """You are a senior football journalist analyst specialised in
-Chelsea FC transfer reporting. For each transfer-news item you receive, return a
-structured JSON verdict with these fields:
+Premier League transfer reporting. For each news item you receive, return a
+structured JSON verdict.
+
+CRITICAL — ONLY classify as Tier 1/2/3/Rumour when the article is genuinely
+about a player TRANSFER (a player joining, leaving, being loaned, contract
+extension, agreement-in-principle, medical, or formal bid).
+
+Return tier="Unknown" AND hit_miss="Unknown" with confidence<=0.1 for ALL of:
+  - Injury reports / player fitness updates / hamstring / surgery
+  - Match reports / lineups / starting XI / player ratings
+  - Manager press conferences without an explicit transfer claim
+  - Tactical analysis / "what we learned" / opinion pieces
+  - Fan reaction / social-media chatter without a named source
+  - Fixture / scheduling announcements
+  - Match-day live blogs
+
+Return verdict fields:
 
 - journalist_name: the named journalist or outlet making the claim. Use, in
   order of preference: (1) a named reporter mentioned in the title or body,

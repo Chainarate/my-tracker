@@ -44,6 +44,26 @@ TRANSFER_KEYWORDS = (
     "swap", "departure", "exit", "wages", "contract", "extension",
 )
 
+# Items matching ANY of these are NOT transfer news (false positives).
+# Filter at scrape-time saves Groq tokens AND reduces alert noise.
+ANTI_TRANSFER_KEYWORDS = (
+    "injury", "injured", "hamstring", "fitness", "surgery", "rehab",
+    "ratings", "player ratings", "starting xi", "starting lineup",
+    "match thread", "match report", "post-match", "live blog",
+    "highlights", "what we learned", "tactical", "fixtures",
+    "fan view", "fan reaction", "predictions",
+)
+
+
+def _looks_like_transfer(blob_lower: str) -> bool:
+    """Returns True if the text mentions transfer-language AND lacks anti-keywords."""
+    if not any(kw in blob_lower for kw in TRANSFER_KEYWORDS):
+        return False
+    # Even if a transfer keyword matches, reject obvious non-transfer content.
+    if any(kw in blob_lower for kw in ANTI_TRANSFER_KEYWORDS):
+        return False
+    return True
+
 _TAG_RE = re.compile(r"<[^>]+>")
 
 log = logging.getLogger(__name__)
@@ -89,7 +109,7 @@ class RedditRSSScraper:
             return None
 
     def _is_transfer(self, blob_lower: str) -> bool:
-        return any(kw in blob_lower for kw in TRANSFER_KEYWORDS)
+        return _looks_like_transfer(blob_lower)
 
     def fetch(self) -> List[TransferItem]:
         if not self.team.reddit_rss_url:

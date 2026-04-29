@@ -21,7 +21,7 @@ import feedparser
 
 from ..config import SharedFeedsConfig, TeamConfig
 from ..models import TransferItem
-from .reddit_rss_scraper import TRANSFER_KEYWORDS
+from .reddit_rss_scraper import TRANSFER_KEYWORDS, _looks_like_transfer
 
 log = logging.getLogger(__name__)
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -61,7 +61,7 @@ class SharedNewsRSSScraper:
         return None
 
     def _looks_like_transfer(self, blob_lower: str) -> bool:
-        return any(kw in blob_lower for kw in TRANSFER_KEYWORDS)
+        return _looks_like_transfer(blob_lower)
 
     def fetch(self) -> List[TransferItem]:
         items: List[TransferItem] = []
