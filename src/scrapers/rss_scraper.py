@@ -17,6 +17,26 @@ log = logging.getLogger(__name__)
 
 _TAG_RE = re.compile(r"<[^>]+>")
 
+# Same keyword set as the Reddit scraper - we want a *tight* transfer focus
+# so the AI isn't asked to classify match reports, lineup news, or fixture
+# announcements (which it correctly returns as Unknown anyway, wasting tokens).
+TRANSFER_KEYWORDS = (
+    # generic transfer language
+    "transfer", "signing", "signs ", "sign ", "signed",
+    "agreement", "agree", "agreed", "deal", "bid", "fee",
+    "loan", "linked", "target", "interest in", "wants to sign",
+    "medical", "here we go", "completed", "completes",
+    "release clause", "swap", "departure", "exit", "sale",
+    "wages", "contract", "extension", "renew",
+    # tier-language used by reddit / fan reporters
+    "tier 1", "tier 2", "tier 3",
+    # named transfer reporters
+    "romano", "ornstein", "fabrizio",
+    "plettenberg", "di marzio", "schira",
+    # transfer windows
+    "summer window", "january window", "transfer window",
+)
+
 
 def _strip_html(s: str) -> str:
     if not s:
@@ -30,6 +50,11 @@ def _entry_published(entry) -> datetime:
         if ts:
             return datetime.fromtimestamp(mktime(ts), tz=timezone.utc)
     return datetime.now(tz=timezone.utc)
+
+
+def _looks_like_transfer(blob: str) -> bool:
+    blob = blob.lower()
+    return any(kw in blob for kw in TRANSFER_KEYWORDS)
 
 
 class NewsRSSScraper:
@@ -50,8 +75,14 @@ class NewsRSSScraper:
 
                 for entry in parsed.entries[: self.cfg.max_entries_per_feed]:
                     title = entry.get("title", "")
-                    summary = _strip_html(entry.get("summary", "") or entry.get("description", ""))
-                    if "chelsea" not in (title + " " + summary).lower():
+                    summary = _strip_html(
+                        entry.get("summary", "") or entry.get("description", "")
+                    )
+                    blob = f"{title} {summary}"
+                    if "chelsea" not in blob.lower():
+                        continue
+                    # NEW: must also look like transfer-news, not match reports etc.
+                    if not _looks_like_transfer(blob):
                         continue
 
                     items.append(

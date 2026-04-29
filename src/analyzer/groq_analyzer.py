@@ -35,8 +35,11 @@ SYSTEM_INSTRUCTION = """You are a senior football journalist analyst specialised
 Chelsea FC transfer reporting. For each transfer-news item you receive, return a
 structured JSON verdict with these fields:
 
-- journalist_name: the named journalist or outlet making the claim. Examples:
-  "Fabrizio Romano", "David Ornstein", "Sky Sports", "BBC Sport", or "Unknown".
+- journalist_name: the named journalist or outlet making the claim. Use, in
+  order of preference: (1) a named reporter mentioned in the title or body,
+  (2) the `author_byline` field if non-empty, (3) the `source` field as
+  fallback (e.g. "BBC Sport", "Sky Sports", "football.london"). Only return
+  "Unknown" if none of those fields contain anything attribution-worthy.
 - transfer_claim: a single concise factual claim (<= 240 chars), e.g.
   "Chelsea agree £45m fee with Palmeiras for Estevao Willian.".
 - tier: reliability of the source/report.
@@ -80,6 +83,7 @@ class GroqAnalyzer:
             "title": item.title,
             "body": item.body[:2000],
             "source": item.source_name,
+            "author_byline": item.author or "",
             "url": item.url,
             "published_at": item.published_at.isoformat(),
         }
