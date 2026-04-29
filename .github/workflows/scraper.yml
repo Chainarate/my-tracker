@@ -60,25 +60,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Diagnose Discord webhook reachability from runner
-        env:
-          WH: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        continue-on-error: true
-        run: |
-          if [ -z "$WH" ]; then
-            echo "No DISCORD_WEBHOOK_URL secret set - skipping diagnostic."
-            exit 0
-          fi
-          echo "Webhook prefix: ${WH:0:50}..."
-          echo "Webhook length: ${#WH}"
-          curl -sS -o /tmp/discord_resp.txt \
-            -w "HTTP %{http_code}\n" \
-            -X POST "$WH" \
-            -H "Content-Type: application/json" \
-            -d '{"content":"⚙️ runner reachability check"}' || true
-          echo "Response body:"
-          cat /tmp/discord_resp.txt 2>/dev/null || echo "(empty)"
-
       - name: Run scraper container
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
