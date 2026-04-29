@@ -107,13 +107,31 @@ class DiscordNotifier:
                     self.webhook_url,
                     data=data,
                     method="POST",
-                    headers={"Content-Type": "application/json"},
+                    headers={
+                        "Content-Type": "application/json",
+                        # Discord rejects requests without a recognisable UA
+                        # (default Python-urllib/* gets a 403 Forbidden).
+                        "User-Agent": (
+                            "ChelseaTransferTrackerBot/3.0 "
+                            "(+https://github.com/hocco/chelsea-transfer-tracker)"
+                        ),
+                    },
                 )
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     if 200 <= resp.status < 300:
                         sent += 1
                     else:
                         log.warning("Discord webhook returned %s", resp.status)
+            except urllib.error.HTTPError as exc:
+                # Capture the response body so we can see *why* Discord rejected.
+                try:
+                    body = exc.read().decode("utf-8", errors="replace")[:500]
+                except Exception:
+                    body = "<unreadable>"
+                log.warning(
+                    "Discord HTTP %s for %s: %s | body=%r",
+                    exc.code, it.item.fingerprint(), exc.reason, body,
+                )
             except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
                 log.warning("Discord notification failed for %s: %s", it.item.fingerprint(), exc)
 

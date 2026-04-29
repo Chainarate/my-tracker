@@ -60,6 +60,22 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Diagnose Discord webhook reachability from runner
+        if: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}
+        env:
+          WH: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        continue-on-error: true
+        run: |
+          echo "Webhook prefix: ${WH:0:50}..."
+          echo "Webhook length: ${#WH}"
+          curl -sS -o /tmp/discord_resp.txt \
+            -w "HTTP %{http_code}\n" \
+            -X POST "$WH" \
+            -H "Content-Type: application/json" \
+            -d '{"content":"⚙️ runner reachability check"}' || true
+          echo "Response body:"
+          cat /tmp/discord_resp.txt 2>/dev/null || echo "(empty)"
+
       - name: Run scraper container
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
@@ -74,7 +90,7 @@ jobs:
             -e STORAGE_BACKEND=local \
             -e OUTPUT_DIR=/data \
             -e DISCORD_WEBHOOK_URL \
-            -e NOTIFY_MIN_TIER="Tier 1" \
+            -e NOTIFY_MIN_TIER="Tier 2" \
             -v "$PWD/data:/data" \
             chelsea-transfer-tracker:ci
 
