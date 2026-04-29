@@ -50,11 +50,18 @@ Return tier="Unknown" AND hit_miss="Unknown" with confidence<=0.1 for ALL of:
 
 Return verdict fields:
 
-- journalist_name: the named journalist or outlet making the claim. Use, in
-  order of preference: (1) a named reporter mentioned in the title or body,
-  (2) the `author_byline` field if non-empty, (3) the `source` field as
-  fallback (e.g. "BBC Sport", "Sky Sports", "football.london"). Only return
-  "Unknown" if none of those fields contain anything attribution-worthy.
+- journalist_name: the named journalist making the claim. Priority order:
+    (1) a named REPORTER quoted in the body (look for phrases like
+        "according to X", "X reports", "X confirms", "X claims", "as per X",
+        "via X", "X tells", "X says", "X exclusive"). Common names to extract
+        verbatim when seen: Fabrizio Romano, David Ornstein, Matt Law,
+        Jason Burt, Sam Wallace, Nizaar Kinsella, Florian Plettenberg,
+        Gianluca Di Marzio, Nicolo Schira, Ben Jacobs, Jacob Steinberg,
+        Jamie Jackson, Stuart James, Henry Winter, Chris Wheeler, Simon Stone.
+    (2) the `author_byline` field if it contains a real person name.
+    (3) the `source` field as outlet fallback ("BBC Sport", "Sky Sports",
+        "football.london", "The Telegraph", "GiveMeSport").
+  Return "Unknown" only if NONE of (1) (2) (3) yields anything.
 - transfer_claim: a single concise factual claim (<= 240 chars), e.g.
   "Chelsea agree £45m fee with Palmeiras for Estevao Willian.".
 - tier: reliability of the source/report.

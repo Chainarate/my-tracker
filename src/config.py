@@ -75,6 +75,7 @@ def _default_teams() -> List[TeamConfig]:
                 "https://www.football.london/chelsea-fc/?service=rss",
                 "https://feeds.bbci.co.uk/sport/football/teams/chelsea/rss.xml",
                 "https://www.theguardian.com/football/chelsea/rss",
+                "https://www.telegraph.co.uk/football/teams/chelsea/rss/",
             ),
         ),
         TeamConfig(
@@ -86,6 +87,7 @@ def _default_teams() -> List[TeamConfig]:
                 "https://www.football.london/arsenal-fc/?service=rss",
                 "https://feeds.bbci.co.uk/sport/football/teams/arsenal/rss.xml",
                 "https://www.theguardian.com/football/arsenal/rss",
+                "https://www.telegraph.co.uk/football/teams/arsenal/rss/",
             ),
         ),
         TeamConfig(
@@ -97,6 +99,7 @@ def _default_teams() -> List[TeamConfig]:
                 "https://feeds.bbci.co.uk/sport/football/teams/manchester-united/rss.xml",
                 "https://www.theguardian.com/football/manchester-united/rss",
                 "https://www.manchestereveningnews.co.uk/all-about/manchester-united-fc/?service=rss",
+                "https://www.telegraph.co.uk/football/teams/manchester-united/rss/",
             ),
         ),
         TeamConfig(
@@ -108,6 +111,7 @@ def _default_teams() -> List[TeamConfig]:
                 "https://feeds.bbci.co.uk/sport/football/teams/manchester-city/rss.xml",
                 "https://www.theguardian.com/football/manchestercity/rss",
                 "https://www.manchestereveningnews.co.uk/all-about/manchester-city-fc/?service=rss",
+                "https://www.telegraph.co.uk/football/teams/manchester-city/rss/",
             ),
         ),
         TeamConfig(
@@ -119,6 +123,7 @@ def _default_teams() -> List[TeamConfig]:
                 "https://feeds.bbci.co.uk/sport/football/teams/newcastle-united/rss.xml",
                 "https://www.theguardian.com/football/newcastleunited/rss",
                 "https://www.chroniclelive.co.uk/all-about/newcastle-united-fc/?service=rss",
+                "https://www.telegraph.co.uk/football/teams/newcastle-united/rss/",
             ),
         ),
         TeamConfig(
@@ -130,6 +135,7 @@ def _default_teams() -> List[TeamConfig]:
                 "https://www.football.london/tottenham-hotspur-fc/?service=rss",
                 "https://feeds.bbci.co.uk/sport/football/teams/tottenham-hotspur/rss.xml",
                 "https://www.theguardian.com/football/tottenham-hotspur/rss",
+                "https://www.telegraph.co.uk/football/teams/tottenham-hotspur/rss/",
             ),
         ),
         TeamConfig(
@@ -142,6 +148,7 @@ def _default_teams() -> List[TeamConfig]:
                 "https://feeds.bbci.co.uk/sport/football/teams/liverpool/rss.xml",
                 "https://www.theguardian.com/football/liverpool/rss",
                 "https://www.liverpoolecho.co.uk/all-about/liverpool-fc/?service=rss",
+                "https://www.telegraph.co.uk/football/teams/liverpool/rss/",
             ),
         ),
     ]
@@ -157,6 +164,13 @@ class SharedFeedsConfig:
         "https://www.theguardian.com/football/rss",
         # Sky Sports - generic Premier League feed
         "https://www.skysports.com/rss/11661",
+        # The Telegraph football - subscription content but RSS gives titles
+        # + summaries which is enough to extract Matt Law / Jason Burt etc.
+        "https://www.telegraph.co.uk/football/rss/",
+        # GiveMeSport - aggregator that quotes Romano/Ornstein heavily
+        "https://www.givemesport.com/feed/",
+        # Caught Offside - aggregator with frequent Romano references
+        "https://caughtoffside.com/feed/",
     )
     max_entries_per_feed: int = 25
 
