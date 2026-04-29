@@ -61,11 +61,14 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Diagnose Discord webhook reachability from runner
-        if: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}
         env:
           WH: ${{ secrets.DISCORD_WEBHOOK_URL }}
         continue-on-error: true
         run: |
+          if [ -z "$WH" ]; then
+            echo "No DISCORD_WEBHOOK_URL secret set - skipping diagnostic."
+            exit 0
+          fi
           echo "Webhook prefix: ${WH:0:50}..."
           echo "Webhook length: ${#WH}"
           curl -sS -o /tmp/discord_resp.txt \
