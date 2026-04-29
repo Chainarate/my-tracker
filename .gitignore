@@ -7,6 +7,16 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .DS_Store
+
+# Ignore the data dir by default (big, machine-generated)...
 data/
-*.csv
+
+# ...but track the canonical CSV that the cron pushes back so the
+# database actually accumulates across runs.
+!data/
+data/*
+!data/chelsea_tracker.csv
+
+*.csv.bak
+
 !.env.example
