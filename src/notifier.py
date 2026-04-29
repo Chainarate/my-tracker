@@ -99,7 +99,10 @@ class DiscordNotifier:
         for it in targets:
             payload = {
                 "username": "Premier League Transfer Tracker",
-                "avatar_url": "https://upload.wikimedia.org/wikipedia/en/thumb/c/cc/Chelsea_FC.svg/240px-Chelsea_FC.svg.png",
+                # Newspaper emoji from Twemoji CDN (stable, no auth needed).
+                # Swap to PL logo if preferred:
+                #   https://upload.wikimedia.org/wikipedia/en/f/f2/Premier_League_Logo.svg
+                "avatar_url": "https://abs.twimg.com/emoji/v2/72x72/1f4f0.png",
                 "embeds": [_build_embed(it)],
             }
             try:
