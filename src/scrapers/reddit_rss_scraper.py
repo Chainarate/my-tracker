@@ -1,30 +1,29 @@
 """
-Reads Chelsea-related transfer chatter from r/chelseafc via the public RSS feed
+Reads transfer chatter for one team from its subreddit RSS feed
 (no PRAW, no OAuth, no client id/secret).
 
-Reddit serves a public RSS feed for any subreddit listing:
+Reddit serves a public RSS feed for any subreddit listing, e.g.:
     https://old.reddit.com/r/chelseafc/new/.rss
 
 Reddit aggressively blocks non-browser User-Agents (returns an HTML "blocked"
-page that breaks feedparser with "not well-formed"). To work around this we
-fetch the bytes ourselves via urllib using a Chrome-like UA, then hand the
-raw bytes to feedparser - which handles malformed input much better than the
-default URL-fetching path.
+page that breaks feedparser with "not well-formed"). We fetch the bytes
+ourselves via urllib using a Chrome-like UA, then hand the raw bytes to
+feedparser - which handles malformed input much better than the URL path.
 """
 from __future__ import annotations
 
 import logging
+import re
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from html import unescape
 from time import mktime
 from typing import List
-import re
 
 import feedparser
 
-from ..config import RedditRSSConfig
+from ..config import TeamConfig
 from ..models import TransferItem
 
 # Chrome-on-Mac UA. Reddit serves XML RSS to browsers; serves HTML blockpage
@@ -35,21 +34,22 @@ BROWSER_UA = (
     "Chrome/124.0.0.0 Safari/537.36"
 )
 
-log = logging.getLogger(__name__)
-
-
+# Generic transfer signals we look for. Team-name match comes from TeamConfig.
 TRANSFER_KEYWORDS = (
     "transfer", "signing", "agreement", "deal", "bid", "fee",
     "loan", "linked", "target", "tier 1", "tier 2", "tier 3",
     "medical", "here we go", "agreed", "sale", "release clause",
-    "romano", "ornstein", "fabrizio",
+    "romano", "ornstein", "fabrizio", "plettenberg", "di marzio",
+    "summer window", "january window", "transfer window",
+    "swap", "departure", "exit", "wages", "contract", "extension",
 )
 
 _TAG_RE = re.compile(r"<[^>]+>")
 
+log = logging.getLogger(__name__)
+
 
 def _strip_html(s: str) -> str:
-    """Reddit RSS bodies are HTML-encoded; produce plain text."""
     if not s:
         return ""
     return unescape(_TAG_RE.sub("", s)).strip()
@@ -63,22 +63,18 @@ def _entry_published(entry) -> datetime:
     return datetime.now(tz=timezone.utc)
 
 
-def _looks_like_transfer(blob: str) -> bool:
-    blob = blob.lower()
-    return any(kw in blob for kw in TRANSFER_KEYWORDS)
-
-
 class RedditRSSScraper:
-    """Pulls posts from r/chelseafc via Reddit's free public RSS feed."""
+    """Pulls posts from a single team's subreddit via Reddit's free public RSS feed."""
 
-    def __init__(self, cfg: RedditRSSConfig, user_agent: str) -> None:
-        self.cfg = cfg
+    def __init__(self, team: TeamConfig, user_agent: str) -> None:
+        self.team = team
         self.user_agent = user_agent
 
     def _fetch_bytes(self) -> bytes | None:
-        """Fetch Reddit RSS bytes with a Chrome UA. Returns None on failure."""
+        if not self.team.reddit_rss_url:
+            return None
         req = urllib.request.Request(
-            self.cfg.feed_url,
+            self.team.reddit_rss_url,
             headers={
                 "User-Agent": BROWSER_UA,
                 "Accept": "application/atom+xml, application/xml, text/xml, */*",
@@ -89,37 +85,39 @@ class RedditRSSScraper:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 return resp.read()
         except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
-            log.warning("Reddit RSS HTTP fetch failed: %s", exc)
+            log.warning("[%s] Reddit RSS HTTP fetch failed: %s", self.team.name, exc)
             return None
 
+    def _is_transfer(self, blob_lower: str) -> bool:
+        return any(kw in blob_lower for kw in TRANSFER_KEYWORDS)
+
     def fetch(self) -> List[TransferItem]:
-        log.info("Fetching Reddit RSS feed: %s", self.cfg.feed_url)
+        if not self.team.reddit_rss_url:
+            return []
+        log.info("[%s] Fetching Reddit RSS: %s", self.team.name, self.team.reddit_rss_url)
         raw = self._fetch_bytes()
         if not raw:
             return []
         parsed = feedparser.parse(raw)
-
         if parsed.bozo and not parsed.entries:
-            # Likely Reddit served an HTML blockpage even with a Chrome UA.
-            preview = raw[:200].decode("utf-8", errors="replace")
-            log.warning(
-                "Reddit RSS feed parse failed: %s (response preview: %r)",
-                parsed.bozo_exception, preview,
-            )
+            log.warning("[%s] Reddit RSS parse failed: %s", self.team.name, parsed.bozo_exception)
             return []
 
-        source_name = parsed.feed.get("title", "r/chelseafc")
+        source_name = parsed.feed.get("title", f"r/{self.team.primary_keyword}")
         items: List[TransferItem] = []
-
-        for entry in parsed.entries[: self.cfg.max_entries]:
+        for entry in parsed.entries[: self.team.max_reddit_entries]:
             try:
                 title = entry.get("title", "")
-                body = _strip_html(entry.get("summary", "") or entry.get("content", [{"value": ""}])[0].get("value", ""))
-                if not _looks_like_transfer(f"{title} {body}"):
+                body = _strip_html(
+                    entry.get("summary", "")
+                    or entry.get("content", [{"value": ""}])[0].get("value", "")
+                )
+                blob = f"{title} {body}".lower()
+                if not self._is_transfer(blob):
                     continue
-
                 items.append(
                     TransferItem(
+                        team=self.team.name,
                         source="reddit_rss",
                         source_name=source_name,
                         title=title,
@@ -131,7 +129,7 @@ class RedditRSSScraper:
                     )
                 )
             except Exception as exc:
-                log.warning("Skipping Reddit RSS entry due to error: %s", exc)
+                log.warning("[%s] Skipping Reddit entry due to error: %s", self.team.name, exc)
 
-        log.info("Reddit RSS scraper produced %d candidate items", len(items))
+        log.info("[%s] Reddit RSS produced %d items", self.team.name, len(items))
         return items

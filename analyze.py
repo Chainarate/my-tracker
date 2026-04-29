@@ -39,6 +39,7 @@ def main(path: str) -> int:
 
     sources = Counter(r["source"] for r in rows)
     source_names = Counter(r["source_name"] for r in rows)
+    teams = Counter(r.get("team", "Unknown") for r in rows)
     tiers = Counter(r["tier"] for r in rows)
     hit_miss = Counter(r["hit_miss"] for r in rows)
     journalists = Counter(r["journalist_name"] for r in rows)
@@ -69,6 +70,9 @@ def main(path: str) -> int:
     print(f"  First entry: {first}")
     print(f"  Last entry:  {last}")
     print(f"  Avg conf:    {avg_conf:.2f}")
+    print()
+    print(f"By team:")
+    print(fmt_count(teams))
     print()
     print(f"By source:")
     print(fmt_count(sources))

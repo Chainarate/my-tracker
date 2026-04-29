@@ -50,8 +50,9 @@ TIER_RANK = {"Tier 1": 1, "Tier 2": 2, "Tier 3": 3, "Rumour": 4, "Unknown": 5}
 
 def _build_embed(item: AnalyzedItem) -> dict:
     title = (
-        f"{TIER_EMOJI.get(item.tier, '⚫')} {item.tier}  "
-        f"·  {HIT_MISS_EMOJI.get(item.hit_miss, '❓')} {item.hit_miss}"
+        f"⚽ {item.item.team}  ·  "
+        f"{TIER_EMOJI.get(item.tier, '⚫')} {item.tier}  ·  "
+        f"{HIT_MISS_EMOJI.get(item.hit_miss, '❓')} {item.hit_miss}"
     )
     return {
         "title": title,
@@ -97,7 +98,7 @@ class DiscordNotifier:
         sent = 0
         for it in targets:
             payload = {
-                "username": "Chelsea Transfer Tracker",
+                "username": "Premier League Transfer Tracker",
                 "avatar_url": "https://upload.wikimedia.org/wikipedia/en/thumb/c/cc/Chelsea_FC.svg/240px-Chelsea_FC.svg.png",
                 "embeds": [_build_embed(it)],
             }

@@ -1,14 +1,13 @@
 """
-Entry point for the Chelsea FC Transfer News Scraper & AI Analyzer.
+Entry point for the Premier League Transfer News Scraper & AI Analyzer.
 
-Zero-cost stack (v3):
-    1. Pull candidate items from Reddit (RSS) and curated news RSS feeds.
+Zero-cost stack (v4 — multi-team):
+    1. For each TeamConfig, pull candidates from its subreddit RSS + news feeds.
     2. Deduplicate against the existing CSV (state-of-the-world).
-    3. Send each new item to Groq (free tier, Llama 3.3 70B) for journalist + tier extraction.
-    4. Append the analyzed rows to chelsea_tracker.csv (pandas).
-    5. Optionally upload the CSV to S3/GCS.
-
-Run as a one-shot job (Docker container scheduled on Harness CI/CD).
+    3. Send each new item to Groq for journalist + tier extraction.
+    4. Append the analyzed rows to the CSV with a `team` column.
+    5. Notify Discord on Tier 1 hits (best-effort).
+    6. Optionally upload the CSV to S3/GCS.
 """
 from __future__ import annotations
 
@@ -36,30 +35,31 @@ def _setup_logging(level: str) -> None:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
-def _dedup_against_csv(items: List[TransferItem], csv_path: str) -> List[TransferItem]:
-    seen = existing_fingerprints(csv_path)
-    return [it for it in items if it.fingerprint() not in seen]
-
-
 def main() -> int:
     cfg = load_config()
     _setup_logging(cfg.log_level)
-    log = logging.getLogger("chelsea-tracker")
+    log = logging.getLogger("transfer-tracker")
 
-    log.info("Chelsea Transfer Tracker starting (zero-cost stack: RSS + Groq)")
+    log.info("Transfer Tracker starting (zero-cost stack: %d teams)", len(cfg.teams))
 
-    # 1. Scrape (no auth - all public RSS)
-    reddit_items = RedditRSSScraper(cfg.reddit_rss, cfg.user_agent).fetch()
-    news_items = NewsRSSScraper(cfg.news_rss, cfg.user_agent).fetch()
-    all_items: List[TransferItem] = reddit_items + news_items
-    log.info("Total candidates from all sources: %d", len(all_items))
+    # 1. Scrape per-team
+    all_items: List[TransferItem] = []
+    for team in cfg.teams:
+        team_items: List[TransferItem] = []
+        team_items += RedditRSSScraper(team, cfg.user_agent).fetch()
+        team_items += NewsRSSScraper(team, cfg.user_agent).fetch()
+        log.info("[%s] total candidates: %d", team.name, len(team_items))
+        all_items += team_items
+
+    log.info("Total candidates across all teams: %d", len(all_items))
 
     # 2. Dedup against existing CSV (avoid re-spending Groq quota)
     output_dir = os.getenv("OUTPUT_DIR", "/data")
     os.makedirs(output_dir, exist_ok=True)
     csv_path = os.path.join(output_dir, cfg.storage.output_filename)
 
-    new_items = _dedup_against_csv(all_items, csv_path)
+    seen = existing_fingerprints(csv_path)
+    new_items = [it for it in all_items if it.fingerprint() not in seen]
     log.info("New items to analyze (after CSV dedup): %d", len(new_items))
 
     if not new_items:
@@ -76,7 +76,7 @@ def main() -> int:
     written = write_csv(csv_path, analyzed)
     log.info("Wrote %d new analyzed rows", written)
 
-    # 5. Notify Discord on Tier 1 hits (best-effort, never crashes the run)
+    # 5. Notify Discord on Tier 1+ hits (best-effort)
     try:
         DiscordNotifier().notify(analyzed)
     except Exception as exc:  # pragma: no cover - belt and suspenders
@@ -87,7 +87,7 @@ def main() -> int:
     if uri:
         log.info("Final artifact available at: %s", uri)
 
-    log.info("Chelsea Transfer Tracker run complete")
+    log.info("Transfer Tracker run complete")
     return 0
 
 

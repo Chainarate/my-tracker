@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 
 CSV_FIELDS: List[str] = [
     "fingerprint",
+    "team",
     "source",
     "source_name",
     "title",
