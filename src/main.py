@@ -20,6 +20,7 @@ from typing import List
 from .analyzer import GroqAnalyzer
 from .config import load_config
 from .models import AnalyzedItem, TransferItem
+from .notifier import DiscordNotifier
 from .scrapers import NewsRSSScraper, RedditRSSScraper
 from .storage import upload, write_csv
 from .storage.csv_writer import existing_fingerprints
@@ -75,7 +76,13 @@ def main() -> int:
     written = write_csv(csv_path, analyzed)
     log.info("Wrote %d new analyzed rows", written)
 
-    # 5. Push to object storage (or skip in 'local' mode)
+    # 5. Notify Discord on Tier 1 hits (best-effort, never crashes the run)
+    try:
+        DiscordNotifier().notify(analyzed)
+    except Exception as exc:  # pragma: no cover - belt and suspenders
+        log.warning("Notifier raised but pipeline continues: %s", exc)
+
+    # 6. Push to object storage (or skip in 'local' mode)
     uri = upload(csv_path, cfg.storage)
     if uri:
         log.info("Final artifact available at: %s", uri)

@@ -142,6 +142,9 @@ def main() -> int:
     fake_OpenAI = MagicMock(return_value=fake_openai_client)
 
     # ---- Run pipeline -------------------------------------------------------
+    # Don't actually hit Discord during tests
+    fake_urlopen = MagicMock()
+
     with patch(
         "src.scrapers.reddit_rss_scraper.RedditRSSScraper._fetch_bytes",
         new=fake_fetch_bytes,
@@ -154,6 +157,9 @@ def main() -> int:
     ), patch(
         "src.analyzer.groq_analyzer.OpenAI",
         new=fake_OpenAI,
+    ), patch(
+        "src.notifier.urllib.request.urlopen",
+        new=fake_urlopen,
     ):
         rc = app_main.main()
 
@@ -197,6 +203,9 @@ def main() -> int:
     ), patch(
         "src.analyzer.groq_analyzer.OpenAI",
         new=fake_OpenAI,
+    ), patch(
+        "src.notifier.urllib.request.urlopen",
+        new=fake_urlopen,
     ):
         rc2 = app_main.main()
 
