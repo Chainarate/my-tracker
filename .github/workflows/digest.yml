@@ -1,0 +1,33 @@
+# Posts a once-a-day Discord summary of the last 24h of transfer activity.
+# Reads the CSV that the main scraper workflow commits back to main.
+
+name: Daily Discord Digest
+
+on:
+  schedule:
+    # 09:00 UTC = 16:00 Asia/Bangkok
+    - cron: "0 9 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  post-digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run digest
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DIGEST_LOOKBACK_HOURS: "24"
+        run: python3 digest.py

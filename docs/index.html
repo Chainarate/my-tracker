@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Premier League Transfer Tracker</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📰%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0f1116;
+    --panel: #1a1d26;
+    --border: #2a2e3a;
+    --fg: #e6e8ee;
+    --muted: #9aa0b0;
+    --accent: #7c5cff;
+    --tier1: #2ecc71;
+    --tier2: #f1c40f;
+    --tier3: #e67e22;
+    --rumour: #95a5a6;
+    --unknown: #4d525e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    background: var(--bg); color: var(--fg);
+  }
+  h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em; }
+  h2 { margin: 0 0 12px; font-size: 14px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .subtitle { color: var(--muted); margin: 0 0 24px; font-size: 13px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .grid-wide { grid-column: 1 / -1; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+  .stat { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .stat .num { font-size: 28px; font-weight: 700; }
+  .stat .label { color: var(--muted); font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  table th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  table tr:last-child td { border-bottom: none; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .pill-tier1 { background: rgba(46,204,113,.15); color: var(--tier1); }
+  .pill-tier2 { background: rgba(241,196,15,.15); color: var(--tier2); }
+  .pill-tier3 { background: rgba(230,126,34,.15); color: var(--tier3); }
+  .pill-rumour { background: rgba(149,165,166,.15); color: var(--rumour); }
+  .pill-unknown { background: rgba(77,82,94,.3); color: var(--muted); }
+  .pill-hit { background: rgba(46,204,113,.15); color: var(--tier1); }
+  .pill-pending { background: rgba(241,196,15,.15); color: var(--tier2); }
+  .pill-miss { background: rgba(231,76,60,.15); color: #e74c3c; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .loading { color: var(--muted); text-align: center; padding: 40px; }
+  .error { color: #e74c3c; padding: 16px; background: rgba(231,76,60,.1); border-radius: 8px; }
+  canvas { max-height: 280px !important; }
+  .header-row { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .truncate { max-width: 380px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+<div class="header-row">
+  <div>
+    <h1>📰 Premier League Transfer Tracker</h1>
+    <p class="subtitle" id="subtitle">Loading…</p>
+  </div>
+  <div class="meta">
+    <div>Source: <a href="https://github.com/Chainarate/my-tracker" id="repolink">GitHub repo</a></div>
+    <div id="updated">Last updated: —</div>
+  </div>
+</div>
+
+<div id="content" class="grid"></div>
+<div id="error" class="error" style="display:none"></div>
+
+<!-- PapaParse for CSV, Chart.js for graphs (single-file CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script>
+const REPO_OWNER = "Chainarate";
+const REPO_NAME = "my-tracker";
+const CSV_PATH = "data/chelsea_tracker.csv";
+const CSV_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/${CSV_PATH}?cb=${Date.now()}`;
+
+const TIER_COLOR = {
+  "Tier 1": "#2ecc71",
+  "Tier 2": "#f1c40f",
+  "Tier 3": "#e67e22",
+  "Rumour": "#95a5a6",
+  "Unknown": "#4d525e",
+};
+const TEAM_COLOR = {
+  "Chelsea": "#034694",
+  "Arsenal": "#ef0107",
+  "Manchester United": "#da291c",
+  "Manchester City": "#6cabdd",
+  "Newcastle": "#241f20",
+  "Tottenham": "#132257",
+  "Liverpool": "#c8102e",
+};
+
+function pill(cls, text) { return `<span class="pill pill-${cls}">${text}</span>`; }
+function tierPill(t) { return pill(t.toLowerCase().replace(" ","").replace("rumour","rumour"), t); }
+function hmPill(h) { return pill(h.toLowerCase(), h); }
+function escapeHTML(s) {
+  return (s||"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function counter(rows, key) {
+  const c = {};
+  for (const r of rows) {
+    const v = r[key] || "";
+    if (!v) continue;
+    c[v] = (c[v]||0) + 1;
+  }
+  return c;
+}
+function toSorted(c, n=10) {
+  return Object.entries(c).sort((a,b) => b[1] - a[1]).slice(0, n);
+}
+
+async function load() {
+  try {
+    const resp = await fetch(CSV_URL);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching CSV (is the repo public?)`);
+    const text = await resp.text();
+    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+    render(parsed.data);
+  } catch (e) {
+    document.getElementById("error").style.display = "block";
+    document.getElementById("error").textContent =
+      `Failed to load data: ${e.message}. If the GitHub repo is private, GitHub Pages must be served from the same private repo (Pro plan), or make the repo public.`;
+  }
+}
+
+function render(rows) {
+  if (!rows.length) {
+    document.getElementById("error").style.display = "block";
+    document.getElementById("error").textContent = "CSV is empty.";
+    return;
+  }
+
+  const teamCounts = counter(rows, "team");
+  const tierCounts = counter(rows, "tier");
+  const hmCounts = counter(rows, "hit_miss");
+  const journalistCounts = counter(rows.filter(r => (r.journalist_name||"").toLowerCase() !== "unknown"), "journalist_name");
+  const sourceCounts = counter(rows, "source_name");
+
+  const dates = rows.map(r => r.analyzed_at).filter(Boolean).sort();
+  const first = dates[0]?.slice(0,10) || "—";
+  const last  = dates[dates.length-1]?.slice(0,16).replace("T"," ") || "—";
+
+  document.getElementById("subtitle").textContent =
+    `${rows.length} transfer items across ${Object.keys(teamCounts).length} clubs · first ${first} · latest ${last}`;
+  document.getElementById("updated").textContent = `Last updated: ${last} UTC`;
+
+  const tier1Recent = rows
+    .filter(r => r.tier === "Tier 1")
+    .sort((a,b) => (b.analyzed_at||"").localeCompare(a.analyzed_at||""))
+    .slice(0, 10);
+
+  const c = document.getElementById("content");
+  c.innerHTML = `
+    <div class="card">
+      <h2>Database total</h2>
+      <div class="stat"><span class="num">${rows.length}</span><span class="label">analyzed items</span></div>
+      <div class="stat"><span class="num">${tierCounts["Tier 1"]||0}</span><span class="label">Tier 1 reports</span></div>
+      <div class="stat"><span class="num">${Object.keys(journalistCounts).length}</span><span class="label">named journalists</span></div>
+    </div>
+
+    <div class="card">
+      <h2>By tier</h2>
+      <canvas id="tierChart"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>By club</h2>
+      <canvas id="teamChart"></canvas>
+    </div>
+
+    <div class="card grid-wide">
+      <h2>Top 15 journalists by activity</h2>
+      <canvas id="journoChart" style="max-height: 380px !important;"></canvas>
+    </div>
+
+    <div class="card grid-wide">
+      <h2>Recent Tier 1 reports</h2>
+      <table>
+        <thead><tr>
+          <th>Team</th><th>Tier</th><th>Hit/Miss</th><th>Journalist</th>
+          <th>Claim</th><th>Analyzed</th>
+        </tr></thead>
+        <tbody>
+          ${tier1Recent.map(r => `
+            <tr>
+              <td>${escapeHTML(r.team)}</td>
+              <td>${tierPill(r.tier)}</td>
+              <td>${hmPill(r.hit_miss||"Unknown")}</td>
+              <td>${escapeHTML(r.journalist_name||"Unknown")}</td>
+              <td><a href="${escapeHTML(r.url||"#")}" target="_blank" rel="noopener">
+                <span class="truncate">${escapeHTML(r.transfer_claim||r.title)}</span></a></td>
+              <td><span class="meta">${(r.analyzed_at||"").slice(0,16).replace("T"," ")}</span></td>
+            </tr>`).join("") || `<tr><td colspan="6" class="meta">(no Tier 1 reports yet)</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card grid-wide">
+      <h2>Top sources</h2>
+      <table>
+        <thead><tr><th>Source</th><th style="text-align:right">Reports</th></tr></thead>
+        <tbody>
+          ${toSorted(sourceCounts, 15).map(([s,n]) =>
+            `<tr><td>${escapeHTML(s)}</td><td style="text-align:right">${n}</td></tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  // ---- Charts ----------------------------------------------------------
+  const ds = (counts, colorFn) => ({
+    labels: Object.keys(counts),
+    datasets: [{
+      data: Object.values(counts),
+      backgroundColor: Object.keys(counts).map(colorFn),
+      borderColor: "#1a1d26",
+      borderWidth: 2,
+    }]
+  });
+  const chartOpts = {
+    plugins: {
+      legend: { labels: { color: "#9aa0b0" } },
+    },
+  };
+
+  new Chart(document.getElementById("tierChart"), {
+    type: "doughnut",
+    data: ds(tierCounts, t => TIER_COLOR[t] || "#7c5cff"),
+    options: chartOpts,
+  });
+
+  new Chart(document.getElementById("teamChart"), {
+    type: "bar",
+    data: ds(teamCounts, t => TEAM_COLOR[t] || "#7c5cff"),
+    options: {
+      ...chartOpts,
+      indexAxis: "y",
+      scales: {
+        x: { ticks: { color: "#9aa0b0" }, grid: { color: "#2a2e3a" } },
+        y: { ticks: { color: "#e6e8ee" }, grid: { display: false } },
+      },
+      plugins: { legend: { display: false } },
+    },
+  });
+
+  const topJ = toSorted(journalistCounts, 15);
+  new Chart(document.getElementById("journoChart"), {
+    type: "bar",
+    data: {
+      labels: topJ.map(([j]) => j),
+      datasets: [{
+        data: topJ.map(([_, n]) => n),
+        backgroundColor: "#7c5cff",
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      ...chartOpts,
+      indexAxis: "y",
+      scales: {
+        x: { ticks: { color: "#9aa0b0" }, grid: { color: "#2a2e3a" } },
+        y: { ticks: { color: "#e6e8ee" }, grid: { display: false } },
+      },
+      plugins: { legend: { display: false } },
+    },
+  });
+}
+
+document.getElementById("repolink").href = `https://github.com/${REPO_OWNER}/${REPO_NAME}`;
+load();
+</script>
+
+</body>
+</html>
