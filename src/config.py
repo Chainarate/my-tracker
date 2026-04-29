@@ -55,6 +55,15 @@ class TeamConfig:
 
 
 def _default_teams() -> List[TeamConfig]:
+    """
+    Each team scrapes from 3+ independent news sources:
+      - BBC Sport (national broadcaster, conservative reporting)
+      - The Guardian (broadsheet, named bylines)
+      - A regional Reach plc paper (football.london / MEN / Chronicle Live /
+        Liverpool Echo) - heavy transfer-rumour coverage
+      - Club-official feed where available (chelseafc.com, liverpool.com)
+      - Subreddit RSS for fan-sourced + leaked Tier-1 reports
+    """
     return [
         TeamConfig(
             name="Chelsea",
@@ -65,6 +74,7 @@ def _default_teams() -> List[TeamConfig]:
                 "https://www.chelseafc.com/en/rss-feeds/news",
                 "https://www.football.london/chelsea-fc/?service=rss",
                 "https://feeds.bbci.co.uk/sport/football/teams/chelsea/rss.xml",
+                "https://www.theguardian.com/football/chelsea/rss",
             ),
         ),
         TeamConfig(
@@ -75,24 +85,29 @@ def _default_teams() -> List[TeamConfig]:
             news_feeds=(
                 "https://www.football.london/arsenal-fc/?service=rss",
                 "https://feeds.bbci.co.uk/sport/football/teams/arsenal/rss.xml",
+                "https://www.theguardian.com/football/arsenal/rss",
             ),
         ),
         TeamConfig(
             name="Manchester United",
             primary_keyword="manchester united",
-            aliases=("man united", "man utd", "red devils", "mufc", "ten hag"),
+            aliases=("man united", "man utd", "red devils", "mufc"),
             reddit_rss_url="https://old.reddit.com/r/reddevils/new/.rss",
             news_feeds=(
                 "https://feeds.bbci.co.uk/sport/football/teams/manchester-united/rss.xml",
+                "https://www.theguardian.com/football/manchester-united/rss",
+                "https://www.manchestereveningnews.co.uk/all-about/manchester-united-fc/?service=rss",
             ),
         ),
         TeamConfig(
             name="Manchester City",
             primary_keyword="manchester city",
-            aliases=("man city", "mcfc", "pep guardiola"),
+            aliases=("man city", "mcfc"),
             reddit_rss_url="https://old.reddit.com/r/MCFC/new/.rss",
             news_feeds=(
                 "https://feeds.bbci.co.uk/sport/football/teams/manchester-city/rss.xml",
+                "https://www.theguardian.com/football/manchestercity/rss",
+                "https://www.manchestereveningnews.co.uk/all-about/manchester-city-fc/?service=rss",
             ),
         ),
         TeamConfig(
@@ -102,6 +117,8 @@ def _default_teams() -> List[TeamConfig]:
             reddit_rss_url="https://old.reddit.com/r/NUFC/new/.rss",
             news_feeds=(
                 "https://feeds.bbci.co.uk/sport/football/teams/newcastle-united/rss.xml",
+                "https://www.theguardian.com/football/newcastleunited/rss",
+                "https://www.chroniclelive.co.uk/all-about/newcastle-united-fc/?service=rss",
             ),
         ),
         TeamConfig(
@@ -112,19 +129,36 @@ def _default_teams() -> List[TeamConfig]:
             news_feeds=(
                 "https://www.football.london/tottenham-hotspur-fc/?service=rss",
                 "https://feeds.bbci.co.uk/sport/football/teams/tottenham-hotspur/rss.xml",
+                "https://www.theguardian.com/football/tottenham-hotspur/rss",
             ),
         ),
         TeamConfig(
             name="Liverpool",
             primary_keyword="liverpool",
-            aliases=("the reds", "lfc", "anfield", "klopp", "slot"),
+            aliases=("the reds", "lfc", "anfield"),
             reddit_rss_url="https://old.reddit.com/r/LiverpoolFC/new/.rss",
             news_feeds=(
                 "https://www.liverpool.com/?service=rss",
                 "https://feeds.bbci.co.uk/sport/football/teams/liverpool/rss.xml",
+                "https://www.theguardian.com/football/liverpool/rss",
+                "https://www.liverpoolecho.co.uk/all-about/liverpool-fc/?service=rss",
             ),
         ),
     ]
+
+
+@dataclass(frozen=True)
+class SharedFeedsConfig:
+    """Cross-team feeds. Each item is matched against ALL teams' keywords."""
+    feeds: Tuple[str, ...] = (
+        # BBC Sport - all football (transfer items often leak here first)
+        "https://feeds.bbci.co.uk/sport/football/rss.xml",
+        # The Guardian - top football stories across all clubs
+        "https://www.theguardian.com/football/rss",
+        # Sky Sports - generic Premier League feed
+        "https://www.skysports.com/rss/11661",
+    )
+    max_entries_per_feed: int = 25
 
 
 @dataclass(frozen=True)
@@ -140,10 +174,11 @@ class StorageConfig:
 class AppConfig:
     groq: GroqConfig
     teams: List[TeamConfig]
+    shared_feeds: SharedFeedsConfig
     storage: StorageConfig
     log_level: str = "INFO"
     user_agent: str = (
-        "transfer-tracker/4.0 (+https://github.com/hocco/chelsea-transfer-tracker)"
+        "transfer-tracker/5.0 (+https://github.com/hocco/chelsea-transfer-tracker)"
     )
 
 
@@ -154,6 +189,7 @@ def load_config() -> AppConfig:
             model=_optional("GROQ_MODEL", "llama-3.1-8b-instant"),
         ),
         teams=_default_teams(),
+        shared_feeds=SharedFeedsConfig(),
         storage=StorageConfig(
             backend=_optional("STORAGE_BACKEND", "local"),
             bucket=_optional("STORAGE_BUCKET", ""),

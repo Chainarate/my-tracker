@@ -20,7 +20,7 @@ from .analyzer import GroqAnalyzer
 from .config import load_config
 from .models import AnalyzedItem, TransferItem
 from .notifier import DiscordNotifier
-from .scrapers import NewsRSSScraper, RedditRSSScraper
+from .scrapers import NewsRSSScraper, RedditRSSScraper, SharedNewsRSSScraper
 from .storage import upload, write_csv
 from .storage.csv_writer import existing_fingerprints
 
@@ -42,16 +42,20 @@ def main() -> int:
 
     log.info("Transfer Tracker starting (zero-cost stack: %d teams)", len(cfg.teams))
 
-    # 1. Scrape per-team
+    # 1a. Scrape per-team (Reddit + team-specific news)
     all_items: List[TransferItem] = []
     for team in cfg.teams:
         team_items: List[TransferItem] = []
         team_items += RedditRSSScraper(team, cfg.user_agent).fetch()
         team_items += NewsRSSScraper(team, cfg.user_agent).fetch()
-        log.info("[%s] total candidates: %d", team.name, len(team_items))
+        log.info("[%s] team-specific candidates: %d", team.name, len(team_items))
         all_items += team_items
 
-    log.info("Total candidates across all teams: %d", len(all_items))
+    # 1b. Scrape cross-team feeds (BBC general, Guardian football, Sky Sports PL)
+    shared = SharedNewsRSSScraper(cfg.shared_feeds, cfg.teams, cfg.user_agent).fetch()
+    all_items += shared
+
+    log.info("Total candidates across all teams + shared: %d", len(all_items))
 
     # 2. Dedup against existing CSV (avoid re-spending Groq quota)
     output_dir = os.getenv("OUTPUT_DIR", "/data")
