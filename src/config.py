@@ -31,7 +31,7 @@ def _optional(key: str, default: str) -> str:
 @dataclass(frozen=True)
 class GroqConfig:
     api_key: str
-    model: str = "llama-3.3-70b-versatile"   # free tier, JSON-mode capable
+    model: str = "llama-3.1-8b-instant"      # free tier, 500K tokens/day (5x of 70B)
     temperature: float = 0.0
     max_output_tokens: int = 768
     request_timeout: float = 30.0

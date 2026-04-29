@@ -66,7 +66,7 @@ jobs:
         run: |
           docker run --rm \
             -e GROQ_API_KEY \
-            -e GROQ_MODEL=llama-3.3-70b-versatile \
+            -e GROQ_MODEL=llama-3.1-8b-instant \
             -e REDDIT_RSS_URL=https://old.reddit.com/r/chelseafc/new/.rss \
             -e STORAGE_BACKEND=local \
             -e OUTPUT_DIR=/data \
